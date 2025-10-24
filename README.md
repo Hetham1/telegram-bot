@@ -15,10 +15,16 @@ git push -u origin main
 
 ### 2. Deploy to VPS (One Command)
 ```bash
-curl -sSL https://raw.githubusercontent.com/YOUR_USERNAME/telegram-bot/main/install.sh | bash
+# Method 1: Pass token directly (recommended for piped install)
+BOT_TOKEN='your_bot_token_here' bash <(curl -sSL https://raw.githubusercontent.com/Hetham1/telegram-bot/main/install.sh)
+
+# Method 2: Download and run (allows interactive prompt)
+curl -sSL https://raw.githubusercontent.com/Hetham1/telegram-bot/main/install.sh -o install.sh
+chmod +x install.sh
+./install.sh
 ```
 
-Replace `YOUR_USERNAME` with your GitHub username. The installer will prompt for your bot token.
+Replace `your_bot_token_here` with your actual bot token from @BotFather.
 
 ### 3. Start the Bot
 ```bash

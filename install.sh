@@ -54,8 +54,29 @@ pip install -r requirements.txt
 
 echo ""
 echo -e "${GREEN}Step 4: Configuring bot...${NC}"
-echo "Please enter your bot token from @BotFather:"
-read -p "BOT_TOKEN: " BOT_TOKEN_INPUT
+
+# Check if BOT_TOKEN was passed as environment variable
+if [ -z "$BOT_TOKEN" ]; then
+    echo "Please enter your bot token from @BotFather:"
+    read -p "BOT_TOKEN: " BOT_TOKEN_INPUT
+    
+    # If still empty (piped script), show instructions
+    if [ -z "$BOT_TOKEN_INPUT" ]; then
+        echo -e "${RED}Error: No bot token provided!${NC}"
+        echo ""
+        echo "To fix this, run the installer with your token:"
+        echo "  BOT_TOKEN='your_token_here' bash <(curl -sSL https://raw.githubusercontent.com/Hetham1/telegram-bot/main/install.sh)"
+        echo ""
+        echo "Or download and run locally:"
+        echo "  curl -sSL https://raw.githubusercontent.com/Hetham1/telegram-bot/main/install.sh -o install.sh"
+        echo "  chmod +x install.sh"
+        echo "  ./install.sh"
+        exit 1
+    fi
+else
+    BOT_TOKEN_INPUT="$BOT_TOKEN"
+    echo "Using bot token from environment variable..."
+fi
 
 # Create .env file
 cat > .env <<EOF
