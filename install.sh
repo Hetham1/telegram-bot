@@ -96,34 +96,41 @@ cat > manage_bot.sh <<'EOFMGMT'
 #!/bin/bash
 # Telegram Bot Management Script
 
+# Check if running as root
+if [ "$EUID" -eq 0 ]; then
+    SUDO_CMD=""
+else
+    SUDO_CMD="sudo"
+fi
+
 case "$1" in
     start)
         echo "Starting Telegram Bot..."
-        sudo systemctl start telegram-bot
-        sudo systemctl status telegram-bot
+        ${SUDO_CMD} systemctl start telegram-bot
+        ${SUDO_CMD} systemctl status telegram-bot
         ;;
     stop)
         echo "Stopping Telegram Bot..."
-        sudo systemctl stop telegram-bot
+        ${SUDO_CMD} systemctl stop telegram-bot
         ;;
     restart)
         echo "Restarting Telegram Bot..."
-        sudo systemctl restart telegram-bot
-        sudo systemctl status telegram-bot
+        ${SUDO_CMD} systemctl restart telegram-bot
+        ${SUDO_CMD} systemctl status telegram-bot
         ;;
     status)
-        sudo systemctl status telegram-bot
+        ${SUDO_CMD} systemctl status telegram-bot
         ;;
     logs)
-        sudo journalctl -u telegram-bot -f
+        ${SUDO_CMD} journalctl -u telegram-bot -f
         ;;
     enable)
         echo "Enabling Telegram Bot to start on boot..."
-        sudo systemctl enable telegram-bot
+        ${SUDO_CMD} systemctl enable telegram-bot
         ;;
     disable)
         echo "Disabling Telegram Bot from starting on boot..."
-        sudo systemctl disable telegram-bot
+        ${SUDO_CMD} systemctl disable telegram-bot
         ;;
     *)
         echo "Telegram Bot Management Script"
