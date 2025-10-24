@@ -1,0 +1,36 @@
+# Environment variables (contains bot token)
+.env
+
+# Bot logs and user data
+bot_logs.json
+bot_users.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+bot_env/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+test_*.py
+
+# Temporary files
+*.log
+*.tmp

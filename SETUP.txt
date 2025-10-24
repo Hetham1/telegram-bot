@@ -1,0 +1,81 @@
+========================================
+   TELEGRAM BOT - QUICK SETUP
+========================================
+
+YOUR ONE-LINER FOR VPS:
+-----------------------
+curl -sSL https://raw.githubusercontent.com/YOUR_USERNAME/telegram-bot/main/install.sh | bash
+
+(Replace YOUR_USERNAME with your GitHub username)
+
+
+STEP-BY-STEP:
+-------------
+1. Push to GitHub:
+   git init
+   git add .
+   git commit -m "Initial commit"
+   git remote add origin https://github.com/YOUR_USERNAME/telegram-bot.git
+   git push -u origin main
+
+2. Run on VPS:
+   curl -sSL https://raw.githubusercontent.com/YOUR_USERNAME/telegram-bot/main/install.sh | bash
+
+3. Start bot:
+   cd ~/telegram-bot
+   ./manage_bot.sh start
+
+
+NEW FEATURES:
+-------------
+✅ Daily messages at 12:00 PM Tehran time
+✅ Hidden admin code: "admin2024"
+✅ No /startadmin command anymore
+✅ Cleaner user experience
+
+
+HOW TO BECOME ADMIN:
+--------------------
+1. Send /start to your bot
+2. Type: admin2024
+3. That's it! You're now admin
+
+Regular users will never know about this code.
+
+
+BOT FLOW:
+---------
+Regular User:
+- Sends /start → Gets question
+- Receives daily message at 12 PM Tehran time
+
+Admin:
+- Sends /start → Types "admin2024"
+- Gets admin panel, no daily messages
+- Can use /stats, /logs, /users, /exit
+
+
+DAILY SCHEDULE:
+--------------
+Time: 12:00 PM (noon)
+Timezone: Asia/Tehran
+Frequency: Every day
+Recipients: All regular users (not admins)
+
+
+MANAGEMENT:
+-----------
+./manage_bot.sh start    - Start bot
+./manage_bot.sh stop     - Stop bot
+./manage_bot.sh status   - Check status
+./manage_bot.sh logs     - View logs
+
+
+CUSTOMIZE:
+----------
+Change admin code: Edit bot.py line 45
+Change daily time: Edit bot.py line 367
+Change question: Edit bot.py line 338
+
+
+That's it! Clean and simple. 🎉
