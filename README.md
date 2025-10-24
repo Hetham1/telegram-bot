@@ -45,16 +45,16 @@ cd ~/telegram-bot
 
 ### For Admins (Hidden):
 1. Send `/start` to the bot
-2. **Type the admin code:** `admin2024` (just send this text)
+2. **Type the admin code:** `Admin2024` (just send this text)
 3. You're now an admin! You'll see available commands
 4. You won't receive daily questions
 
 ### Admin Commands:
+- `/admin` - Show admin panel with buttons
 - `/stats` - View today's statistics
 - `/logs` - View all log dates
 - `/users` - Manage users and roles
 - `/exit` - Exit admin mode (become regular user)
-- `/start` - Show admin panel
 
 **Note:** Regular users won't know about the admin code. It's completely hidden!
 

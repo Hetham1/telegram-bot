@@ -1,6 +1,6 @@
 #!/bin/bash
 # One-liner installer for Telegram Bot
-# Usage: curl -sSL https://raw.githubusercontent.com/YOUR_USERNAME/telegram-bot/main/install.sh | bash
+# Usage: curl -sSL https://raw.githubusercontent.com/Hetham1/telegram-bot/main/install.sh | bash
 
 set -e  # Exit on any error
 
@@ -23,7 +23,7 @@ if [ "$EUID" -eq 0 ]; then
 fi
 
 # Get the repository URL (you'll need to update this)
-REPO_URL="https://github.com/YOUR_USERNAME/telegram-bot.git"
+REPO_URL="https://github.com/Hetham1/telegram-bot.git"
 INSTALL_DIR="$HOME/telegram-bot"
 
 echo -e "${GREEN}Step 1: Installing system dependencies...${NC}"
@@ -60,7 +60,7 @@ BOT_TOKEN=$BOT_TOKEN_INPUT
 EOF
 
 # Make scripts executable
-chmod +x bot.py deploy.sh
+chmod +x bot.py
 
 echo ""
 echo -e "${GREEN}Step 5: Creating systemd service...${NC}"
@@ -167,9 +167,11 @@ echo "   ./manage_bot.sh enable"
 echo ""
 echo -e "${GREEN}Bot Commands on Telegram:${NC}"
 echo "  /start - Normal user flow"
-echo "  /startadmin - Become admin"
+echo "  Admin Code: Admin2024 (type after /start)"
+echo "  /admin - Admin panel with buttons"
 echo "  /stats - View statistics (admin)"
 echo "  /logs - View log dates (admin)"
+echo "  /users - Manage users (admin)"
 echo ""
 echo -e "${GREEN}Management Commands:${NC}"
 echo "  ./manage_bot.sh {start|stop|restart|status|logs|enable|disable}"
