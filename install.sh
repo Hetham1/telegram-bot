@@ -17,9 +17,13 @@ NC='\033[0m' # No Color
 
 # Check if running as root
 if [ "$EUID" -eq 0 ]; then
-    echo -e "${RED}Please don't run this script as root. Run as a regular user.${NC}"
-    echo "The script will use sudo when needed."
-    exit 1
+    echo -e "${YELLOW}Warning: Running as root. This is not recommended for security reasons.${NC}"
+    echo "Consider creating a regular user for the bot."
+    echo ""
+    # If running as root, don't use sudo
+    SUDO_CMD=""
+else
+    SUDO_CMD="sudo"
 fi
 
 # Get the repository URL (you'll need to update this)
@@ -27,8 +31,8 @@ REPO_URL="https://github.com/Hetham1/telegram-bot.git"
 INSTALL_DIR="$HOME/telegram-bot"
 
 echo -e "${GREEN}Step 1: Installing system dependencies...${NC}"
-sudo apt update -y
-sudo apt install -y python3 python3-pip python3-venv git curl
+${SUDO_CMD} apt update -y
+${SUDO_CMD} apt install -y python3 python3-pip python3-venv git curl
 
 echo ""
 echo -e "${GREEN}Step 2: Cloning repository...${NC}"
@@ -67,7 +71,7 @@ echo -e "${GREEN}Step 5: Creating systemd service...${NC}"
 BOT_USER=$(whoami)
 BOT_DIR=$(pwd)
 
-sudo tee /etc/systemd/system/telegram-bot.service > /dev/null <<EOF
+${SUDO_CMD} tee /etc/systemd/system/telegram-bot.service > /dev/null <<EOF
 [Unit]
 Description=Telegram Bot Service
 After=network.target
@@ -141,8 +145,8 @@ EOFMGMT
 chmod +x manage_bot.sh
 
 # Reload systemd and enable service
-sudo systemctl daemon-reload
-sudo systemctl enable telegram-bot
+${SUDO_CMD} systemctl daemon-reload
+${SUDO_CMD} systemctl enable telegram-bot
 
 echo ""
 echo -e "${GREEN}=========================================="
