@@ -728,13 +728,15 @@ def main():
     # Set up daily job at 12:00 PM Tehran time
     tehran_tz = pytz.timezone('Asia/Tehran')
     job_queue = application.job_queue
+    
+    # Create time object with Tehran timezone
+    daily_time = time(hour=12, minute=0, second=0, tzinfo=tehran_tz)
+    
     job_queue.run_daily(
         bot.send_daily_message,
-        time=time(hour=12, minute=0, second=0),
+        time=daily_time,
         days=(0, 1, 2, 3, 4, 5, 6),  # All days of the week
-        chat_id=None,
-        name='daily_message',
-        data=tehran_tz
+        name='daily_message'
     )
     
     print("Bot is starting...")
