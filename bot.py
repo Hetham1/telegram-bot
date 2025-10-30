@@ -779,7 +779,7 @@ class SimpleBot:
 
                 await context.bot.send_message(
                     chat_id=user_id,
-                    text="قرص‌هات رو خوردی؟ 💊",
+                    text="ظهر بخیر ثارینا! 🌙\n\ قرص‌ آهنت رو خوردی؟ 💊",
                     reply_markup=reply_markup
                 )
                 logger.info(f"Daily message sent to user {user_id}")
@@ -802,7 +802,7 @@ class SimpleBot:
 
                 await context.bot.send_message(
                     chat_id=user_id,
-                    text="شب بخیر ثارینا! 🌙\n\nقبل از خواب قرص‌هات رو خوردی؟ 💊",
+                    text="شب بخیر ثارینا! 🌙\n\ قرص‌های هورمونیتر رو خوردی؟ 💊",
                     reply_markup=reply_markup
                 )
                 logger.info(f"Evening message sent to user {user_id}")
