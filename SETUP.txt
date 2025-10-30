@@ -28,8 +28,8 @@ STEP-BY-STEP:
 
 NEW FEATURES:
 -------------
-✅ Daily messages at 12:00 PM Tehran time
-✅ Hidden admin code: "admin2024"
+✅ Daily messages at 12:00 PM and 9:00 PM Tehran time
+✅ Hidden admin code: "Admin2024"
 ✅ No /startadmin command anymore
 ✅ Cleaner user experience
 
@@ -57,7 +57,7 @@ Admin:
 
 DAILY SCHEDULE:
 --------------
-Time: 12:00 PM (noon)
+Times: 12:00 PM and 9:00 PM (noon & evening)
 Timezone: Asia/Tehran
 Frequency: Every day
 Recipients: All regular users (not admins)

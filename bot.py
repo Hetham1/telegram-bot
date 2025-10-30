@@ -79,61 +79,83 @@ class SimpleBot:
         except Exception as e:
             logger.error(f"Failed to save users: {e}")
     
-    def log_response(self, user_id, username, response, timestamp=None):
+    def log_response(self, user_id, username, response, timestamp=None, time_period="noon"):
         """Log user response to JSON file"""
         if timestamp is None:
             timestamp = datetime.now().isoformat()
-        
+
         today = date.today().isoformat()
-        
+
         try:
             with open(self.log_file, 'r') as f:
                 logs = json.load(f)
         except (json.JSONDecodeError, FileNotFoundError):
             logs = {}
-        
+
         if today not in logs:
             logs[today] = {
                 'date': today,
+                'noon': {
+                    'total_responses': 0,
+                    'yes_responses': 0,
+                    'no_responses': 0,
+                    'users': {},
+                    'responses': []
+                },
+                'evening': {
+                    'total_responses': 0,
+                    'yes_responses': 0,
+                    'no_responses': 0,
+                    'users': {},
+                    'responses': []
+                }
+            }
+
+        # Ensure time_period exists (for backward compatibility)
+        if time_period not in logs[today]:
+            logs[today][time_period] = {
                 'total_responses': 0,
                 'yes_responses': 0,
                 'no_responses': 0,
                 'users': {},
                 'responses': []
             }
-        
-        logs[today]['total_responses'] += 1
+
+        period_data = logs[today][time_period]
+
+        period_data['total_responses'] += 1
         if response == 'yes':
-            logs[today]['yes_responses'] += 1
+            period_data['yes_responses'] += 1
         else:
-            logs[today]['no_responses'] += 1
-        
-        if user_id not in logs[today]['users']:
-            logs[today]['users'][str(user_id)] = {
+            period_data['no_responses'] += 1
+
+        if str(user_id) not in period_data['users']:
+            period_data['users'][str(user_id)] = {
                 'username': username,
                 'total_responses': 0,
                 'yes_count': 0,
                 'no_count': 0
             }
-        
-        logs[today]['users'][str(user_id)]['total_responses'] += 1
+
+        period_data['users'][str(user_id)]['total_responses'] += 1
         if response == 'yes':
-            logs[today]['users'][str(user_id)]['yes_count'] += 1
+            period_data['users'][str(user_id)]['yes_count'] += 1
         else:
-            logs[today]['users'][str(user_id)]['no_count'] += 1
-        
+            period_data['users'][str(user_id)]['no_count'] += 1
+
         response_entry = {
             'timestamp': timestamp,
             'user_id': user_id,
             'username': username,
-            'response': response
+            'response': response,
+            'time_period': time_period
         }
-        logs[today]['responses'].append(response_entry)
-        
+        period_data['responses'].append(response_entry)
+
         with open(self.log_file, 'w') as f:
             json.dump(logs, f, indent=2)
-        
-        logger.info(f"Logged {response} response from user {username} ({user_id})")
+
+        logger.info(f"Logged {response} response from user {username} ({user_id}) for {time_period}")
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command - regular user flow"""
@@ -229,29 +251,63 @@ class SimpleBot:
         try:
             with open(self.log_file, 'r') as f:
                 logs = json.load(f)
-            
+
             today = date.today().isoformat()
-            if today not in logs:
+            if today not in logs or 'noon' not in logs[today]:
                 stats_text = "No data available for today."
             else:
-                stats = logs[today]
-                stats_text = f"📊 Daily Statistics - {stats['date']}\n\n"
-                stats_text += f"Total Responses: {stats['total_responses']}\n"
-                stats_text += f"Yes Responses: {stats['yes_responses']}\n"
-                stats_text += f"No Responses: {stats['no_responses']}\n\n"
-                
-                if stats['total_responses'] > 0:
-                    yes_percentage = (stats['yes_responses'] / stats['total_responses']) * 100
-                    no_percentage = (stats['no_responses'] / stats['total_responses']) * 100
-                    stats_text += f"Percentages:\n"
-                    stats_text += f"  Yes: {yes_percentage:.1f}%\n"
-                    stats_text += f"  No: {no_percentage:.1f}%\n\n"
-                
-                if stats['users']:
-                    stats_text += f"Active Users: {len(stats['users'])}\n"
-                    for user_id, user_data in stats['users'].items():
-                        stats_text += f"  • {user_data['username']}: {user_data['yes_count']}Yes {user_data['no_count']}No\n"
-            
+                day_data = logs[today]
+                stats_text = f"📊 Daily Statistics - {day_data['date']}\n\n"
+
+                # Show noon stats
+                noon = day_data.get('noon', {'total_responses': 0, 'yes_responses': 0, 'no_responses': 0})
+                stats_text += f"🌅 NOON (12:00 PM):\n"
+                stats_text += f"  Total: {noon['total_responses']} | Yes: {noon['yes_responses']} | No: {noon['no_responses']}\n"
+                if noon['total_responses'] > 0:
+                    yes_pct = (noon['yes_responses'] / noon['total_responses']) * 100
+                    stats_text += f"  Success Rate: {yes_pct:.1f}%\n"
+                stats_text += "\n"
+
+                # Show evening stats
+                evening = day_data.get('evening', {'total_responses': 0, 'yes_responses': 0, 'no_responses': 0})
+                stats_text += f"🌙 EVENING (9:00 PM):\n"
+                stats_text += f"  Total: {evening['total_responses']} | Yes: {evening['yes_responses']} | No: {evening['no_responses']}\n"
+                if evening['total_responses'] > 0:
+                    yes_pct = (evening['yes_responses'] / evening['total_responses']) * 100
+                    stats_text += f"  Success Rate: {yes_pct:.1f}%\n"
+                stats_text += "\n"
+
+                # Overall stats
+                total_responses = noon['total_responses'] + evening['total_responses']
+                total_yes = noon['yes_responses'] + evening['yes_responses']
+                total_no = noon['no_responses'] + evening['no_responses']
+
+                if total_responses > 0:
+                    overall_pct = (total_yes / total_responses) * 100
+                    stats_text += f"📈 OVERALL TODAY:\n"
+                    stats_text += f"  Total Responses: {total_responses}\n"
+                    stats_text += f"  Yes: {total_yes} | No: {total_no}\n"
+                    stats_text += f"  Success Rate: {overall_pct:.1f}%\n\n"
+
+                # User breakdown
+                all_users = set()
+                for period in ['noon', 'evening']:
+                    if period in day_data and 'users' in day_data[period]:
+                        all_users.update(day_data[period]['users'].keys())
+
+                if all_users:
+                    stats_text += f"👥 USER BREAKDOWN:\n"
+                    for user_id in all_users:
+                        user_stats = {'yes': 0, 'no': 0, 'total': 0}
+                        for period in ['noon', 'evening']:
+                            if period in day_data and user_id in day_data[period]['users']:
+                                user_data = day_data[period]['users'][user_id]
+                                user_stats['yes'] += user_data['yes_count']
+                                user_stats['no'] += user_data['no_count']
+                                user_stats['total'] += user_data['total_responses']
+                        username = user_data.get('username', f'ID: {user_id}')
+                        stats_text += f"  • {username}: {user_stats['yes']}Y {user_stats['no']}N\n"
+
             keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="admin_back")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_text(stats_text, reply_markup=reply_markup)
@@ -307,20 +363,39 @@ class SimpleBot:
         try:
             with open(self.log_file, 'r') as f:
                 logs = json.load(f)
-            
+
             if not logs:
                 dates_text = "No logs available."
             else:
                 dates_text = "📝 Available Log Dates:\n\n"
                 for date_str in sorted(logs.keys(), reverse=True)[:10]:
-                    stats = logs[date_str]
+                    day_data = logs[date_str]
                     dates_text += f"{date_str}\n"
-                    dates_text += f"  Total: {stats['total_responses']} | Yes: {stats['yes_responses']} | No: {stats['no_responses']}\n\n"
-            
+
+                    # Show noon stats
+                    noon = day_data.get('noon', {'total_responses': 0, 'yes_responses': 0, 'no_responses': 0})
+                    if noon['total_responses'] > 0:
+                        dates_text += f"  🌅 Noon: {noon['total_responses']} total | {noon['yes_responses']}Y {noon['no_responses']}N\n"
+
+                    # Show evening stats
+                    evening = day_data.get('evening', {'total_responses': 0, 'yes_responses': 0, 'no_responses': 0})
+                    if evening['total_responses'] > 0:
+                        dates_text += f"  🌙 Evening: {evening['total_responses']} total | {evening['yes_responses']}Y {evening['no_responses']}N\n"
+
+                    # Show overall if any responses
+                    total_responses = noon['total_responses'] + evening['total_responses']
+                    if total_responses > 0:
+                        total_yes = noon['yes_responses'] + evening['yes_responses']
+                        total_no = noon['no_responses'] + evening['no_responses']
+                        success_rate = (total_yes / total_responses) * 100 if total_responses > 0 else 0
+                        dates_text += f"  📈 Overall: {total_responses} total | {success_rate:.1f}% success\n"
+
+                    dates_text += "\n"
+
             keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="admin_back")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_text(dates_text, reply_markup=reply_markup)
-            
+
         except Exception as e:
             keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="admin_back")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -606,17 +681,19 @@ class SimpleBot:
             return
         
         # Handle yes/no responses
-        if data == "yes":
-            await self.handle_yes_choice(query, context)
-        elif data == "no":
-            await self.handle_no_choice(query, context)
+        if data in ["yes", "yes_noon", "yes_evening"]:
+            time_period = "noon" if "noon" in data else "evening" if "evening" in data else "noon"
+            await self.handle_yes_choice(query, context, time_period)
+        elif data in ["no", "no_noon", "no_evening"]:
+            time_period = "noon" if "noon" in data else "evening" if "evening" in data else "noon"
+            await self.handle_no_choice(query, context, time_period)
     
-    async def handle_yes_choice(self, query, context: ContextTypes.DEFAULT_TYPE):
+    async def handle_yes_choice(self, query, context: ContextTypes.DEFAULT_TYPE, time_period="noon"):
         """Handle when user selects yes"""
         user = query.from_user
         user_info = f"@{user.username}" if user.username else f"User ID: {user.id}"
-        
-        self.log_response(user.id, user_info, 'yes')
+
+        self.log_response(user.id, user_info, 'yes', time_period=time_period)
         
         await query.edit_message_text(
             "عالیه! 🎉\nممنون که قرص‌هات رو خوردی. مراقب خودت باش! 💚\n\nگل برای گل 🌸"
@@ -644,12 +721,12 @@ class SimpleBot:
             logger.error(f"Failed to send admin notification: {e}")
             logger.info(f"ADMIN NOTIFICATION (fallback): {admin_message}")
     
-    async def handle_no_choice(self, query, context: ContextTypes.DEFAULT_TYPE):
+    async def handle_no_choice(self, query, context: ContextTypes.DEFAULT_TYPE, time_period="noon"):
         """Handle when user selects no"""
         user = query.from_user
         user_info = f"@{user.username}" if user.username else f"User ID: {user.id}"
-        
-        self.log_response(user.id, user_info, 'no')
+
+        self.log_response(user.id, user_info, 'no', time_period=time_period)
         
         await query.edit_message_text(
             "اشکالی نداره! 😊\n۱۵ دقیقه دیگه دوباره ازت می‌پرسم..."
@@ -661,21 +738,25 @@ class SimpleBot:
             when=900,
             chat_id=user.id,
             name=f'delayed_question_{user.id}',
-            data={'chat_id': user.id}
+            data={'chat_id': user.id, 'time_period': time_period}
         )
     
     async def send_delayed_question(self, context: ContextTypes.DEFAULT_TYPE):
         """Send the question again after a delay"""
         chat_id = context.job.chat_id
-        
+        time_period = context.job.data.get('time_period', 'noon')
+
+        # Use time_period-specific callback data
+        callback_suffix = f"_{time_period}" if time_period != "noon" else ""
+
         keyboard = [
             [
-                InlineKeyboardButton("بله، خوردم! ✅", callback_data="yes"),
-                InlineKeyboardButton("هنوز نه 😅", callback_data="no")
+                InlineKeyboardButton("بله، خوردم! ✅", callback_data=f"yes{callback_suffix}"),
+                InlineKeyboardButton("هنوز نه 😅", callback_data=f"no{callback_suffix}")
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
         await context.bot.send_message(
             chat_id=chat_id,
             text="قرص‌هات رو خوردی؟ 💊",
@@ -685,17 +766,17 @@ class SimpleBot:
     async def send_daily_message(self, context: ContextTypes.DEFAULT_TYPE):
         """Send daily message to all regular users at 12pm Tehran time"""
         logger.info("Sending daily messages...")
-        
+
         for user_id in self.regular_users:
             try:
                 keyboard = [
                     [
-                        InlineKeyboardButton("بله، خوردم! ✅", callback_data="yes"),
-                        InlineKeyboardButton("هنوز نه 😅", callback_data="no")
+                        InlineKeyboardButton("بله، خوردم! ✅", callback_data="yes_noon"),
+                        InlineKeyboardButton("هنوز نه 😅", callback_data="no_noon")
                     ]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
-                
+
                 await context.bot.send_message(
                     chat_id=user_id,
                     text="قرص‌هات رو خوردی؟ 💊",
@@ -704,6 +785,29 @@ class SimpleBot:
                 logger.info(f"Daily message sent to user {user_id}")
             except Exception as e:
                 logger.error(f"Failed to send daily message to user {user_id}: {e}")
+
+    async def send_evening_message(self, context: ContextTypes.DEFAULT_TYPE):
+        """Send evening message to all regular users at 9pm Tehran time"""
+        logger.info("Sending evening messages...")
+
+        for user_id in self.regular_users:
+            try:
+                keyboard = [
+                    [
+                        InlineKeyboardButton("بله، خوردم! ✅", callback_data="yes_evening"),
+                        InlineKeyboardButton("هنوز نه 😅", callback_data="no_evening")
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text="شب بخیر ثارینا! 🌙\n\nقبل از خواب قرص‌هات رو خوردی؟ 💊",
+                    reply_markup=reply_markup
+                )
+                logger.info(f"Evening message sent to user {user_id}")
+            except Exception as e:
+                logger.error(f"Failed to send evening message to user {user_id}: {e}")
 
 def main():
     """Start the bot"""
@@ -725,22 +829,32 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.handle_message))
     application.add_handler(CallbackQueryHandler(bot.handle_callback))
     
-    # Set up daily job at 12:00 PM Tehran time
+    # Set up daily jobs at 12:00 PM and 9:00 PM Tehran time
     tehran_tz = pytz.timezone('Asia/Tehran')
     job_queue = application.job_queue
-    
-    # Create time object with Tehran timezone
+
+    # Create time objects with Tehran timezone
     daily_time = time(hour=12, minute=0, second=0, tzinfo=tehran_tz)
-    
+    evening_time = time(hour=21, minute=0, second=0, tzinfo=tehran_tz)
+
+    # Schedule 12:00 PM message
     job_queue.run_daily(
         bot.send_daily_message,
         time=daily_time,
         days=(0, 1, 2, 3, 4, 5, 6),  # All days of the week
         name='daily_message'
     )
+
+    # Schedule 9:00 PM message
+    job_queue.run_daily(
+        bot.send_evening_message,
+        time=evening_time,
+        days=(0, 1, 2, 3, 4, 5, 6),  # All days of the week
+        name='evening_message'
+    )
     
     print("Bot is starting...")
-    print("Daily messages scheduled for 12:00 PM Asia/Tehran time")
+    print("Daily messages scheduled for 12:00 PM and 9:00 PM Asia/Tehran time")
     print("Admin code: Admin2024")
     print("Press Ctrl+C to stop the bot")
     
