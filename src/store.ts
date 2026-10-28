@@ -19,16 +19,16 @@ export class Store {
     });
   }
 
-  question(id: string, userId: number, date: string, period: Period, daily = false, sourceUpdateId?: number) {
+  question(id: string, userId: number, date: string, period: Period, daily = false, sourceUpdateId?: number, seriesId = id) {
     const sourceCondition = sourceUpdateId === undefined ? '' :
       ' AND EXISTS (SELECT 1 FROM reminders WHERE user_id = ? AND date = ? AND period = ? AND source_update_id = ?)';
-    const params: Array<string | number> = [id, userId, date, period, this.now, userId, userId, date, period];
+    const params: Array<string | number> = [id, userId, date, period, seriesId, this.now, userId, seriesId];
     if (sourceUpdateId !== undefined) params.push(userId, date, period, sourceUpdateId);
     const payload = JSON.stringify({ chat_id: userId, text: daily ? question(period) : reminderQuestion(period), reply_markup: questionKeyboard(id) });
     return [
-      this.sql(`INSERT OR IGNORE INTO prompts(id, user_id, date, period, created_at)
-        SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM users WHERE id = ? AND active = 1 AND is_admin = 0)
-        AND NOT EXISTS (SELECT 1 FROM prompts WHERE user_id = ? AND date = ? AND period = ? AND answer = 'yes')${sourceCondition}`, ...params),
+      this.sql(`INSERT OR IGNORE INTO prompts(id, user_id, date, period, series_id, created_at)
+        SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM users WHERE id = ? AND active = 1 AND is_admin = 0)
+        AND NOT EXISTS (SELECT 1 FROM prompts WHERE series_id = ? AND answer = 'yes')${sourceCondition}`, ...params),
       this.sql(`INSERT OR IGNORE INTO outbox(id, chat_id, method, payload, prompt_id, created_at, due_at)
         SELECT ?, ?, 'sendMessage', ?, id, ?, ? FROM prompts WHERE id = ? AND answer IS NULL`,
       `prompt:${id}`, userId, payload, this.now, this.now, id),

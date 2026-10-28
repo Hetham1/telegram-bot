@@ -14,8 +14,8 @@ export async function drainOutbox(store: Store, telegram: Telegram, limit = 20) 
     if (item.prompt_id) {
       const prompt = await store.prompt(item.prompt_id);
       const user = await store.user(item.chat_id);
-      const yes = prompt ? await store.sql("SELECT id FROM prompts WHERE user_id = ? AND date = ? AND period = ? AND answer = 'yes' LIMIT 1",
-        item.chat_id, prompt.date, prompt.period).first() : null;
+      const yes = prompt ? await store.sql("SELECT id FROM prompts WHERE series_id = ? AND answer = 'yes' LIMIT 1",
+        prompt.series_id).first() : null;
       if (!prompt || prompt.answer || prompt.date !== localTime(store.now, store.env.TIMEZONE).date || !user?.active || user.is_admin || yes) {
         await fail(store, item, 'inactive_prompt'); continue;
       }

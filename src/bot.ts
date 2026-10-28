@@ -104,21 +104,22 @@ export class Bot {
     if (!prompt || !['yes', 'no'].includes(value ?? '') || prompt.user_id !== user.id || prompt.date !== today || !user.active || user.is_admin) {
       reply('این یادآوری فعال نیست. برای شروع دوباره /start را بفرست.'); return;
     }
-    const completed = await s.sql("SELECT id FROM prompts WHERE user_id = ? AND date = ? AND period = ? AND answer = 'yes' LIMIT 1", user.id, today, prompt.period).first();
+    const completed = await s.sql("SELECT id FROM prompts WHERE series_id = ? AND answer = 'yes' LIMIT 1", prompt.series_id).first();
     if (prompt.answer || completed) { reply('پاسخت قبلاً ثبت شده است. 💚'); return; }
     // Conditional writes in one D1 transaction make concurrent/retried button taps harmless.
     actions.push(s.sql(`UPDATE prompts SET answer = ?, answer_update_id = ?, answered_at = ? WHERE id = ? AND answer IS NULL
-      AND NOT EXISTS (SELECT 1 FROM prompts WHERE user_id = ? AND date = ? AND period = ? AND answer = 'yes')`,
-    value!, update.update_id, s.now, prompt.id, user.id, today, prompt.period));
+      AND NOT EXISTS (SELECT 1 FROM prompts WHERE series_id = ? AND answer = 'yes')`,
+    value!, update.update_id, s.now, prompt.id, prompt.series_id));
     if (value === 'no') {
       actions.push(s.sql(`INSERT INTO reminders(user_id, date, period, due_at, source_update_id)
         SELECT user_id, date, period, ?, ? FROM prompts WHERE id = ? AND answer_update_id = ?
         ON CONFLICT(user_id, date, period) DO UPDATE SET due_at = excluded.due_at, source_update_id = excluded.source_update_id`,
       s.now + 900_000, update.update_id, prompt.id, update.update_id));
     } else {
-      actions.push(s.sql('DELETE FROM reminders WHERE user_id = ? AND date = ? AND period = ?', user.id, today, prompt.period),
+      actions.push(s.sql(`DELETE FROM reminders WHERE user_id = ? AND date = ? AND period = ?
+        AND source_update_id IN (SELECT answer_update_id FROM prompts WHERE series_id = ?)`, user.id, today, prompt.period, prompt.series_id),
         s.sql(`UPDATE outbox SET failed_at = ?, last_error = 'dose_confirmed' WHERE sent_at IS NULL AND prompt_id IN
-          (SELECT id FROM prompts WHERE user_id = ? AND date = ? AND period = ?)`, s.now, user.id, today, prompt.period));
+          (SELECT id FROM prompts WHERE series_id = ?)`, s.now, prompt.series_id));
       const admins = await s.sql('SELECT id FROM users WHERE is_admin = 1 AND active = 1').all<{ id: number }>();
       const label = user.username ? `@${user.username}` : user.first_name || `User ${user.id}`;
       const text = `${label} confirmed taking ${prompt.period === 'afternoon' ? '1 pill (2 p.m.)' : '2 pills (10 p.m.)'}.\nDate: ${today} (Tehran)\nUser ID: ${user.id}`;

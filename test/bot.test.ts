@@ -25,10 +25,12 @@ const fetcher = (async (input: string, init: RequestInit) => {
 
 before(async () => {
   runtime = new Miniflare(convertV4MiniflareOptions({ modules: true, script: 'export default { fetch() { return new Response("ok") } }',
-    compatibilityDate: '2026-10-01', d1Databases: ['DB'] }));
+    compatibilityDate: '2026-10-01', d1Databases: ['DB', 'MIGRATION_DB'] }));
   env = { DB: await runtime.getD1Database('DB') as unknown as D1Database, BOT_TOKEN: 'test-token', WEBHOOK_SECRET: 'test-secret', ADMIN_IDS: '1', TIMEZONE: 'Asia/Tehran' };
-  const migration = await readFile(new URL('../migrations/0001_initial.sql', import.meta.url), 'utf8');
-  for (const sql of migration.split(';').map(v => v.trim()).filter(Boolean)) await env.DB.prepare(sql).run();
+  for (const name of ['0001_initial.sql', '0002_prompt_series.sql']) {
+    const migration = await readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8');
+    for (const sql of migration.split(';').map(v => v.trim()).filter(Boolean)) await env.DB.prepare(sql).run();
+  }
 });
 after(async () => runtime?.dispose());
 beforeEach(async () => {
@@ -151,6 +153,58 @@ test('cron produces exactly two daily prompts per subscribed non-admin, even whe
   assert.equal(daily.length, 2); assert.ok(daily.every(p => p.user_id === 2));
   const messages = calls.filter(c => c.method === 'sendMessage');
   assert.equal(messages.length, 2); assert.match(messages[0].body.text, /یک قرص/); assert.match(messages[1].body.text, /دو قرص/);
+});
+
+test('early introductory confirmations cannot suppress either daily notification or its snoozes', async () => {
+  now = Date.parse('2026-10-28T22:30:00Z'); // 2 a.m. on October 29 in Tehran.
+  for (const id of [2, 3]) {
+    await send(message(id, '/start'));
+    await send(callback(id, `r|${await promptId()}|yes`));
+  }
+  calls = [];
+  now = Date.parse('2026-10-29T10:30:00Z');
+  await runCron(); await runCron();
+  assert.equal(calls.filter(c => c.method === 'sendMessage').length, 2);
+  const afternoon = (await rows("SELECT * FROM prompts WHERE user_id = 2 AND id LIKE 'd:%'"))[0];
+  await send(callback(2, `r|${afternoon.id}|no`));
+  assert.equal((await rows('SELECT * FROM reminders')).length, 1);
+  now += 900_000; await runCron();
+  const snooze = (await rows("SELECT * FROM prompts WHERE id LIKE 's:%'"))[0];
+  assert.equal(snooze.series_id, afternoon.id);
+  assert.ok(calls.some(c => c.method === 'sendMessage' && c.body.reply_markup?.inline_keyboard[0][0].callback_data === `r|${snooze.id}|yes`));
+  await send(callback(2, `r|${snooze.id}|yes`));
+  assert.equal((await rows('SELECT * FROM reminders')).length, 0);
+  calls = [];
+  now = Date.parse('2026-10-29T18:30:00Z');
+  await runCron(); await runCron();
+  assert.equal(calls.filter(c => c.method === 'sendMessage').length, 2);
+  assert.equal((await rows("SELECT * FROM prompts WHERE id LIKE 'd:%'")).length, 4);
+});
+
+test('answering an introductory question cannot cancel a daily reminder’s pending snooze', async () => {
+  now = Date.parse('2026-10-28T22:30:00Z');
+  await send(message(2, '/start')); const intro = await promptId();
+  now = Date.parse('2026-10-29T10:30:00Z'); await runCron(); const daily = await promptId();
+  await send(callback(2, `r|${daily}|no`));
+  await send(callback(2, `r|${intro}|yes`));
+  assert.equal((await rows('SELECT * FROM reminders')).length, 1);
+  now += 900_000; calls = []; await runCron();
+  assert.equal(calls.filter(c => c.method === 'sendMessage').length, 1);
+  assert.equal((await rows("SELECT series_id FROM prompts WHERE id LIKE 's:%'"))[0].series_id, daily);
+});
+
+test('migration preserves existing answers and reconstructs snooze ancestry', async () => {
+  const legacy = await runtime.getD1Database('MIGRATION_DB');
+  const initial = await readFile(new URL('../migrations/0001_initial.sql', import.meta.url), 'utf8');
+  for (const sql of initial.split(';').map(v => v.trim()).filter(Boolean)) await legacy.prepare(sql).run();
+  await legacy.prepare('INSERT INTO users(id, created_at) VALUES (2, 0)').run();
+  for (const [id, answer, update] of [['u:100', 'no', 101], ['s:101', 'no', 102], ['s:102', 'yes', 103]] as const) {
+    await legacy.prepare("INSERT INTO prompts(id, user_id, date, period, created_at, answer, answer_update_id) VALUES (?, 2, '2026-10-29', 'afternoon', 0, ?, ?)").bind(id, answer, update).run();
+  }
+  const migration = await readFile(new URL('../migrations/0002_prompt_series.sql', import.meta.url), 'utf8');
+  for (const sql of migration.split(';').map(v => v.trim()).filter(Boolean)) await legacy.prepare(sql).run();
+  const data = (await legacy.prepare('SELECT answer, series_id FROM prompts ORDER BY answer_update_id').all()).results;
+  assert.deepEqual(data, [{ answer: 'no', series_id: 'u:100' }, { answer: 'no', series_id: 'u:100' }, { answer: 'yes', series_id: 'u:100' }]);
 });
 
 test('stop cancels snoozes and prevents daily messages; start opts back in', async () => {

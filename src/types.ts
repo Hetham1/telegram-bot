@@ -24,7 +24,7 @@ export interface User {
   pending_action: string | null; pending_until: number | null;
 }
 export interface Prompt {
-  id: string; user_id: number; date: string; period: Period;
+  id: string; user_id: number; date: string; period: Period; series_id: string;
   answer: 'yes' | 'no' | null; answer_update_id: number | null;
 }
 export interface Outgoing {

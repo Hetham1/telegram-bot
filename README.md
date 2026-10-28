@@ -13,6 +13,8 @@ Production: [Telegram bot](https://t.me/Ghorsat_yadet_nare_bot) · [Worker healt
 
 There are two scheduled notifications per day for each subscribed regular user. Tapping **Not yet** requests an additional reminder after 15 minutes (rounded up to the next cron tick). Tapping **Yes** logs the response and cancels pending reminders for that dose. `/start` also sends an introductory question. Admins receive confirmation notifications instead of pill reminders.
 
+Introductory questions and each scheduled reminder have separate response histories. Answering the introductory question cannot suppress either daily notification. Snoozes stay attached to their original question, so a confirmation only ends that question's reminder sequence.
+
 The scheduler evaluates `Asia/Tehran` every minute. Repeated cron executions are deduplicated, with a 30-minute catch-up window. Old-day prompts cannot log responses against a new day. It creates up to 25 daily prompts and drains up to 20 outgoing API calls per tick; this deployment is sized for a personal/small group bot.
 
 ## Commands

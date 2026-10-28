@@ -19,18 +19,18 @@ export async function runScheduler(store: Store, telegram: Telegram) {
   if (period) {
     const users = await store.sql(`SELECT id FROM users WHERE active = 1 AND is_admin = 0
       AND NOT EXISTS (SELECT 1 FROM prompts WHERE id = 'd:' || ? || ':' || ? || ':' || users.id)
-      AND NOT EXISTS (SELECT 1 FROM prompts WHERE user_id = users.id AND date = ? AND period = ? AND answer = 'yes')
-      ORDER BY id LIMIT 25`, local.date, period, local.date, period).all<{ id: number }>();
+      ORDER BY id LIMIT 25`, local.date, period).all<{ id: number }>();
     if (users.results.length) await store.env.DB.batch(users.results.flatMap(user =>
       store.question(`d:${local.date}:${period}:${user.id}`, user.id, local.date, period, true)));
   }
 
-  const reminders = await store.sql(`SELECT r.* FROM reminders r JOIN users u ON u.id = r.user_id
+  const reminders = await store.sql(`SELECT r.*, p.series_id FROM reminders r JOIN users u ON u.id = r.user_id
+    JOIN prompts p ON p.answer_update_id = r.source_update_id
     WHERE r.due_at <= ? AND r.date = ? AND u.active = 1 AND u.is_admin = 0 ORDER BY r.due_at LIMIT 25`,
-  store.now, local.date).all<{ user_id: number; date: string; period: Period; source_update_id: number }>();
+  store.now, local.date).all<{ user_id: number; date: string; period: Period; source_update_id: number; series_id: string }>();
   for (const reminder of reminders.results) {
     await store.env.DB.batch([
-      ...store.question(`s:${reminder.source_update_id}`, reminder.user_id, reminder.date, reminder.period, false, reminder.source_update_id),
+      ...store.question(`s:${reminder.source_update_id}`, reminder.user_id, reminder.date, reminder.period, false, reminder.source_update_id, reminder.series_id),
       store.sql('DELETE FROM reminders WHERE user_id = ? AND date = ? AND period = ? AND source_update_id = ?',
         reminder.user_id, reminder.date, reminder.period, reminder.source_update_id),
     ]);
