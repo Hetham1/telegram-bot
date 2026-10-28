@@ -1,0 +1,6 @@
+# Copy to .dev.vars. Never commit real credentials.
+BOT_TOKEN=
+# Comma-separated numeric Telegram user IDs. Use /id to find yours.
+ADMIN_IDS=
+# Generate a random value with: node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+WEBHOOK_SECRET=
