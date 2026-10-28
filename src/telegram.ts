@@ -13,7 +13,8 @@ export class Telegram {
   async call(method: string, payload: Record<string, unknown>): Promise<void> {
     let response: Response;
     try {
-      response = await this.fetcher(`https://api.telegram.org/bot${this.token}/${method}`, {
+      // Workers' native fetch requires the global receiver when stored on a class.
+      response = await this.fetcher.call(globalThis, `https://api.telegram.org/bot${this.token}/${method}`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload), signal: AbortSignal.timeout(8000),
       });
