@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "saripill-telegram-bot",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "account_id": "234986ebc7241d03e8447394a01d3a3e",
+  "workers_dev": true,
+  "preview_urls": false,
+  "triggers": { "crons": ["* * * * *"] },
+  "vars": { "TIMEZONE": "Asia/Tehran" },
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "saripill-bot",
+      "database_id": "f6165fd5-e91b-4a3e-822a-9443d124328f",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

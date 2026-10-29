@@ -1,5 +1,15 @@
 # Environment variables (contains bot token)
 .env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+node_modules/
+.wrangler/
+dist/
+coverage/
+.local/
 
 # Bot logs and user data
 bot_logs.json

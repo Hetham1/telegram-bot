@@ -1,0 +1,28 @@
+{
+  "name": "saripill-telegram-bot",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.16"
+  },
+  "scripts": {
+    "dev": "wrangler dev --test-scheduled",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test --test-concurrency=1 test/*.test.ts",
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "check": "npm run typecheck && npm test && npm run build",
+    "db:local": "wrangler d1 migrations apply DB --local",
+    "db:remote": "wrangler d1 migrations apply DB --remote",
+    "deploy": "wrangler deploy",
+    "telegram:setup": "node scripts/setup-telegram.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261028.1",
+    "@types/node": "^22.0.0",
+    "miniflare": "5.20261023.2-beta",
+    "tsx": "^4.20.6",
+    "typescript": "~5.9.3",
+    "wrangler": "4.155.0"
+  }
+}

@@ -1,0 +1,47 @@
+export interface Env {
+  DB: D1Database;
+  BOT_TOKEN?: string;
+  WEBHOOK_SECRET?: string;
+  ADMIN_IDS?: string;
+  TIMEZONE?: string;
+}
+
+export type Period = 'afternoon' | 'evening';
+export interface TelegramUser { id: number; username?: string; first_name?: string; is_bot?: boolean }
+export interface Message {
+  message_id: number;
+  from?: TelegramUser;
+  chat: { id: number; type: string };
+  text?: string;
+}
+export interface Update {
+  update_id: number;
+  message?: Message;
+  callback_query?: { id: string; from: TelegramUser; message?: Message; data?: string };
+}
+export interface User {
+  id: number; username: string; first_name: string; is_admin: number; active: number;
+  pending_action: string | null; pending_until: number | null;
+  schedule_initialized: number;
+}
+export interface Prompt {
+  id: string; user_id: number; date: string; period: Period; series_id: string;
+  answer: 'yes' | 'no' | null; answer_update_id: number | null;
+  schedule_key: string; schedule_revision: number; time_minutes: number; pills: string;
+  canceled_at: number | null;
+}
+export interface Schedule {
+  user_id: number; key: string; time_minutes: number; pills: string;
+  enabled: number; deleted: number; revision: number; effective_date: string;
+}
+export interface ScheduleEdit {
+  user_id: number; token: string; action: 'add' | 'time' | 'pills';
+  schedule_key: string; base_revision: number; step: 'time' | 'pills' | 'confirm';
+  time_minutes: number | null; pills: string | null; expires_at: number;
+}
+export interface Outgoing {
+  id: string; chat_id: number; method: string; payload: string;
+  prompt_id: string | null; attempts: number;
+}
+export type Keyboard = { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> };
+export type Fetcher = typeof fetch;
