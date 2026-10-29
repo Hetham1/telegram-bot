@@ -152,7 +152,7 @@ test('cron produces exactly two daily prompts per subscribed non-admin, even whe
   const daily = await rows("SELECT * FROM prompts WHERE id LIKE 'd:%'");
   assert.equal(daily.length, 2); assert.ok(daily.every(p => p.user_id === 2));
   const messages = calls.filter(c => c.method === 'sendMessage');
-  assert.equal(messages.length, 2); assert.match(messages[0].body.text, /یک قرص/); assert.match(messages[1].body.text, /دو قرص/);
+  assert.equal(messages.length, 2); assert.match(messages[0].body.text, /اسنترا/); assert.match(messages[1].body.text, /اون دوتا/);
 });
 
 test('early introductory confirmations cannot suppress either daily notification or its snoozes', async () => {

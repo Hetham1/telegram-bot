@@ -1,21 +1,21 @@
 import type { Keyboard, Period } from './types';
 
-export const welcome = 'سلام ثارینا! 👋\n\nمن اینجام تا بهت یادآوری کنم قرص‌هات رو بخوری! 💊\nهر روز ساعت ۱۴ برای یک قرص و ساعت ۲۲ برای دو قرص، به وقت تهران.\nبرای توقف یادآوری‌ها /stop را بفرست.';
+export const welcome = 'من اینجام تا بهت یادآوری کنم قرص‌هات رو بخوری! 💊\nهر روز ساعت 2 برای اسنترا و ساعت 10 برای اون دوتای دیگه،';
 export const thanks = 'عالیه! 🎉\nممنون که قرص‌هات رو خوردی. مراقب خودت باش! 💚\n\nگل برای گل 🌸';
 export const snoozed = 'اشکالی نداره! 😊\n۱۵ دقیقه دیگه دوباره ازت می‌پرسم...';
 export const stopped = 'یادآوری‌ها متوقف شدند. برای شروع دوباره /start را بفرست.';
 
 export function question(period: Period) {
   return period === 'afternoon'
-    ? 'عصر بخیر ثارینا! ☀️\nساعت ۱۴ است؛ یک قرصت رو خوردی؟ 💊'
-    : 'شب بخیر ثارینا! 🌙\nساعت ۲۲ است؛ دو قرصت رو خوردی؟ 💊💊';
+    ? 'عصر بخیر ثارینا! ☀️\nساعت 2 عه؛ اسنترا رو خوردی؟ 💊'
+    : 'شب بخیر ثارینا! 🌙\nساعت 10 عه؛ اون دوتا رو خوردی؟ 💊💊';
 }
 export function reminderQuestion(period: Period) {
-  return period === 'afternoon' ? 'یک قرص نوبت ساعت ۱۴ رو خوردی؟ 💊' : 'دو قرص نوبت ساعت ۲۲ رو خوردی؟ 💊💊';
+  return period === 'afternoon' ? 'اسنترا رو خوردی؟ 💊' : 'اون دوتا رو خوردی؟ 💊💊';
 }
 export function questionKeyboard(id: string): Keyboard {
   return { inline_keyboard: [[
-    { text: 'بله، خوردم! ✅', callback_data: `r|${id}|yes` },
+    { text: 'اله، خولدم! ✅', callback_data: `r|${id}|yes` },
     { text: 'هنوز نه 😅', callback_data: `r|${id}|no` },
   ]] };
 }
