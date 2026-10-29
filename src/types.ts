@@ -22,10 +22,22 @@ export interface Update {
 export interface User {
   id: number; username: string; first_name: string; is_admin: number; active: number;
   pending_action: string | null; pending_until: number | null;
+  schedule_initialized: number;
 }
 export interface Prompt {
   id: string; user_id: number; date: string; period: Period; series_id: string;
   answer: 'yes' | 'no' | null; answer_update_id: number | null;
+  schedule_key: string; schedule_revision: number; time_minutes: number; pills: string;
+  canceled_at: number | null;
+}
+export interface Schedule {
+  user_id: number; key: string; time_minutes: number; pills: string;
+  enabled: number; deleted: number; revision: number; effective_date: string;
+}
+export interface ScheduleEdit {
+  user_id: number; token: string; action: 'add' | 'time' | 'pills';
+  schedule_key: string; base_revision: number; step: 'time' | 'pills' | 'confirm';
+  time_minutes: number | null; pills: string | null; expires_at: number;
 }
 export interface Outgoing {
   id: string; chat_id: number; method: string; payload: string;

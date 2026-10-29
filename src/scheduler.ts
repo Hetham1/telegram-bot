@@ -2,8 +2,8 @@ import { Bot } from './bot';
 import { drainOutbox } from './delivery';
 import { Store } from './store';
 import { Telegram } from './telegram';
-import { localTime, scheduledPeriod } from './time';
-import type { Period } from './types';
+import { localTime } from './time';
+import type { Schedule } from './types';
 
 export async function runScheduler(store: Store, telegram: Telegram) {
   const pending = await store.sql(`SELECT update_id FROM inbox WHERE processed_at IS NULL AND locked_until <= ? AND attempts < 10
@@ -13,24 +13,30 @@ export async function runScheduler(store: Store, telegram: Telegram) {
     catch { console.error('update_retry_failed', { update_id: item.update_id }); }
   }
 
+  // Covers subscribers created by the previous deployment during migration.
+  const uninitialized = await store.sql('SELECT id FROM users WHERE schedule_initialized = 0 ORDER BY id LIMIT 10').all<{ id: number }>();
+  for (const user of uninitialized.results) await store.ensureSchedules(user.id);
+
   const local = localTime(store.now, store.env.TIMEZONE);
   await store.sql('DELETE FROM reminders WHERE date < ?', local.date).run();
-  const period = scheduledPeriod(store.now, store.env.TIMEZONE);
-  if (period) {
-    const users = await store.sql(`SELECT id FROM users WHERE active = 1 AND is_admin = 0
-      AND NOT EXISTS (SELECT 1 FROM prompts WHERE id = 'd:' || ? || ':' || ? || ':' || users.id)
-      ORDER BY id LIMIT 25`, local.date, period).all<{ id: number }>();
-    if (users.results.length) await store.env.DB.batch(users.results.flatMap(user =>
-      store.question(`d:${local.date}:${period}:${user.id}`, user.id, local.date, period, true)));
-  }
+  const minute = local.hour * 60 + local.minute;
+  const slots = await store.sql(`SELECT s.* FROM schedules s JOIN users u ON u.id = s.user_id
+    WHERE u.active = 1 AND u.is_admin = 0 AND s.enabled = 1 AND s.deleted = 0 AND s.effective_date <= ?
+    AND s.time_minutes <= ? AND s.time_minutes > ?
+    AND NOT EXISTS (SELECT 1 FROM prompts WHERE id = 'd:' || ? || ':' || s.key || ':' || s.user_id)
+    ORDER BY s.time_minutes, s.user_id, s.key LIMIT 25`, local.date, minute, minute - 30, local.date).all<Schedule>();
+  if (slots.results.length) await store.env.DB.batch(slots.results.flatMap(slot =>
+    store.question(`d:${local.date}:${slot.key}:${slot.user_id}`, slot.user_id, local.date, slot, true)));
 
-  const reminders = await store.sql(`SELECT r.*, p.series_id FROM reminders r JOIN users u ON u.id = r.user_id
+  const reminders = await store.sql(`SELECT r.*, p.series_id, p.schedule_revision FROM reminders r JOIN users u ON u.id = r.user_id
     JOIN prompts p ON p.answer_update_id = r.source_update_id
     WHERE r.due_at <= ? AND r.date = ? AND u.active = 1 AND u.is_admin = 0 ORDER BY r.due_at LIMIT 25`,
-  store.now, local.date).all<{ user_id: number; date: string; period: Period; source_update_id: number; series_id: string }>();
+    store.now, local.date).all<{ user_id: number; date: string; period: string; source_update_id: number; series_id: string; schedule_revision: number }>();
   for (const reminder of reminders.results) {
+    const slot = await store.schedule(reminder.user_id, reminder.period);
     await store.env.DB.batch([
-      ...store.question(`s:${reminder.source_update_id}`, reminder.user_id, reminder.date, reminder.period, false, reminder.source_update_id, reminder.series_id),
+      ...(slot?.enabled && slot.revision === reminder.schedule_revision ?
+        store.question(`s:${reminder.source_update_id}`, reminder.user_id, reminder.date, slot, false, reminder.source_update_id, reminder.series_id) : []),
       store.sql('DELETE FROM reminders WHERE user_id = ? AND date = ? AND period = ? AND source_update_id = ?',
         reminder.user_id, reminder.date, reminder.period, reminder.source_update_id),
     ]);
@@ -42,6 +48,7 @@ export async function runScheduler(store: Store, telegram: Telegram) {
     await store.env.DB.batch([
       store.sql('DELETE FROM inbox WHERE processed_at < ?', cutoff),
       store.sql('DELETE FROM outbox WHERE sent_at < ? OR failed_at < ?', cutoff, cutoff),
+      store.sql('DELETE FROM schedule_edits WHERE expires_at < ?', store.now),
     ]);
   }
 }

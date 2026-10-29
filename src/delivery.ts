@@ -11,12 +11,14 @@ export async function drainOutbox(store: Store, telegram: Telegram, limit = 20) 
         ORDER BY CASE WHEN method = 'answerCallbackQuery' THEN 0 ELSE 1 END, created_at, rowid LIMIT 1)
       RETURNING *`, store.now + 60_000, store.now, store.now).first<Outgoing>();
     if (!item) break;
-    if (item.prompt_id) {
+    if (item.prompt_id && item.method === 'sendMessage') {
       const prompt = await store.prompt(item.prompt_id);
       const user = await store.user(item.chat_id);
+      const slot = prompt ? await store.schedule(prompt.user_id, prompt.schedule_key) : null;
       const yes = prompt ? await store.sql("SELECT id FROM prompts WHERE series_id = ? AND answer = 'yes' LIMIT 1",
         prompt.series_id).first() : null;
-      if (!prompt || prompt.answer || prompt.date !== localTime(store.now, store.env.TIMEZONE).date || !user?.active || user.is_admin || yes) {
+      if (!prompt || prompt.answer || prompt.canceled_at || prompt.date !== localTime(store.now, store.env.TIMEZONE).date ||
+          !user?.active || user.is_admin || yes || !slot?.enabled || slot.revision !== prompt.schedule_revision) {
         await fail(store, item, 'inactive_prompt'); continue;
       }
     }

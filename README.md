@@ -4,14 +4,20 @@ A Persian pill reminder bot running on Cloudflare Workers, with D1 persistence a
 
 Production: [Telegram bot](https://t.me/Ghorsat_yadet_nare_bot) · [Worker health](https://saripill-telegram-bot.docker-prod-cloudflare.workers.dev/health).
 
-## Daily schedule
+## Pills and daily schedule
 
 | Tehran time | Reminder |
 | --- | --- |
-| 14:00 / 2 p.m. | One pill |
-| 22:00 / 10 p.m. | Two pills |
+| 14:00 / 2 PM | اسنترا |
+| 22:00 / 10 PM | اون دوتا |
 
-There are two scheduled notifications per day for each subscribed regular user. Tapping **Not yet** requests an additional reminder after 15 minutes (rounded up to the next cron tick). Tapping **Yes** logs the response and cancels pending reminders for that dose. `/start` also sends an introductory question. Admins receive confirmation notifications instead of pill reminders.
+These are the starting reminders. Each subscriber can edit their own pills and daily times inside Telegram with `/schedule` (also `/pills` or `/settings`). The real subscriber and test account have independent settings. Each enabled time sends one notification containing all pills assigned to it.
+
+Choose a reminder to edit its pills or time, pause/resume it, or delete it. **یادآوری جدید** adds another daily time. Enter times such as `2 PM`, `10:30 PM`, or `14:00`; Persian and Arabic digits also work. Enter the complete pill list with one pill per line, optionally including the amount. Preview and press **ذخیره** to save, or use **انصراف** / `/cancel`. Delete also requires confirmation. Up to 12 reminders with 8 pill lines each are supported, and drafts expire after 15 minutes. Two separate reminders cannot share a time; add the pills to the existing time instead.
+
+Tapping **Not yet** requests an additional reminder after 15 minutes (rounded up to the next cron tick). Tapping **Yes** logs the response, updates the question with the thank-you text, and cancels pending follow-ups for that question. `/start` also sends an introductory question. Admins receive confirmation notifications instead of pill reminders.
+
+Editing, pausing or deleting a reminder invalidates its old buttons and cancels pending follow-ups and queued reminders. A time that has passed starts tomorrow. A daily slot already created today is not sent a second time after editing. Deleting all reminders leaves the schedule empty, including after `/start`. `/stop` pauses delivery without deleting the schedule.
 
 Introductory questions and each scheduled reminder have separate response histories. Answering the introductory question cannot suppress either daily notification. Snoozes stay attached to their original question, so a confirmation only ends that question's reminder sequence.
 
@@ -23,6 +29,8 @@ The scheduler evaluates `Asia/Tehran` every minute. Repeated cron executions are
 - `/stop` — pause reminders and remove pending snoozes.
 - `/id` — show your numeric Telegram user ID, without subscribing.
 - `/help` — schedule and help.
+- `/schedule` — edit your pills and daily reminder times; aliases: `/pills`, `/settings`.
+- `/cancel` — discard an unfinished edit.
 - Admins: `/admin`, `/stats`, `/logs`, `/users`, `/promote <id>`, `/demote <id>`, `/cancel`, `/exit`.
 
 `ADMIN_IDS` is a comma-separated list of owner IDs in Worker secrets. Owners can grant/revoke other admins using the menu or commands. The public `Admin2024` password is removed, and every admin command and callback checks permissions. Configured owners cannot be demoted in chat; `/exit` only closes their panel. A delegated admin using `/exit` becomes a regular subscriber. Admins can pause confirmation notifications with `/stop` and resume with `/start`.
@@ -71,6 +79,8 @@ node scripts/setup-telegram.mjs https://YOUR-WORKER.workers.dev --verify
 
 Cloudflare cron changes can take several minutes to propagate. `GET /health` verifies configuration and the database schema without exposing user records. `POST /webhook` requires the `X-Telegram-Bot-Api-Secret-Token` header. There is no public setup or manual-send endpoint.
 
+For an existing deployment, apply `0003_editable_schedules.sql` before deploying the new Worker. It seeds the two current reminders once per existing account and preserves responses, pending snoozes and outgoing messages. Export a private backup first (`wrangler d1 export DB --remote --output .local/before-editable-schedules.sql`). The Worker also seeds accounts created during the migration/deployment gap. New prompt records retain the pill names and time as a snapshot, so later edits do not rewrite history or admin confirmation details. Health reports `schedules: "per_user"` and `default_reminders`, never someone's personal pill list.
+
 ## Existing installation
 
 Subscriptions and historical JSON logs are not stored in Git, and Telegram cannot list all past subscribers. Existing users must send `/start` to the newly deployed bot unless their saved user data is migrated. Retain `bot_users.json` and `bot_logs.json` from the previous server if historical records are needed; do not commit them. The original Python source remains in Git history.
@@ -80,9 +90,10 @@ Changing the webhook does not stop a scheduler on the old server. Disable the pr
 ## Reliability and data
 
 - `src/bot.ts` handles commands and button callbacks; `messages.ts` contains Persian text.
-- `src/time.ts` defines the two daily time slots and timezone conversion.
+- `src/time.ts` parses AM/PM or 24-hour times and converts Tehran dates.
+- `src/schedule-editor.ts` implements the Persian menu and persisted, revision-checked edit drafts.
 - `src/store.ts` and `migrations/` define persistent users, prompts, snoozes, an update inbox, and an outgoing-message queue.
-- `src/scheduler.ts` recovers deferred updates and schedules due reminders.
+- `src/scheduler.ts` recovers deferred updates and schedules each saved, enabled reminder at its chosen minute.
 - `src/delivery.ts` retries transient Telegram errors, respects `retry_after`, and pauses users who block the bot.
 - `src/index.ts` validates webhook authentication, input shape, and body size.
 

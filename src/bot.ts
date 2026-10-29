@@ -1,7 +1,8 @@
 import { Store } from './store';
 import type { Keyboard, Update, User } from './types';
-import { adminKeyboard, adminText, back, snoozed, stopped, thanks, welcome } from './messages';
-import { currentPeriod, localTime, SCHEDULE } from './time';
+import { adminKeyboard, adminText, back, scheduleGuide, scheduleKeyboard, shortPills, snoozed, stopped, thanks, welcomeMessage } from './messages';
+import { clockText, localTime } from './time';
+import { ScheduleEditor } from './schedule-editor';
 
 export class Bot {
   constructor(private store: Store) {}
@@ -29,13 +30,17 @@ export class Bot {
       actor.id, (actor.username ?? '').slice(0, 64), (actor.first_name ?? '').slice(0, 100),
       Number(owner), Number(owner), s.now, Number(owner)).run();
       const user = (await s.user(actor.id))!;
+      if (!user.schedule_initialized) await s.ensureSchedules(user.id);
       const actions: D1PreparedStatement[] = [];
       const reply = (text: string, keyboard?: Keyboard) => actions.push(s.reply(`update:${updateId}:reply`, user.id, text, keyboard, query ? message.message_id : undefined));
+      const editor = new ScheduleEditor(s);
 
       if (query) {
         actions.push(s.outgoing(`update:${updateId}:ack`, user.id, 'answerCallbackQuery', { callback_query_id: query.id }));
         const data = query.data ?? '';
-        if (data.startsWith('admin_') || data.startsWith('user_')) {
+        if (data.startsWith('cfg|')) {
+          await editor.callback(user, data, updateId, message.message_id, actions, reply);
+        } else if (data.startsWith('admin_') || data.startsWith('user_')) {
           if (!user.is_admin) reply('This command is not available.');
           else if (data === 'admin_stats') reply(await this.stats(), back);
           else if (data === 'admin_logs') reply(await this.logs(), back);
@@ -60,23 +65,34 @@ export class Bot {
         const [rawCommand = '', target = ''] = text.split(/\s+/);
         const command = rawCommand.split('@')[0]!.toLowerCase();
         if (command === '/id') reply(`Your Telegram user ID: ${user.id}`);
+        else if (['/schedule', '/pills', '/settings'].includes(command)) {
+          actions.push(editor.clear(user.id)); await editor.menu(user, reply);
+        }
         else if (command === '/start') {
-          actions.push(s.sql('UPDATE users SET active = 1, pending_action = NULL, pending_until = NULL WHERE id = ?', user.id));
+          actions.push(s.sql('UPDATE users SET active = 1, pending_action = NULL, pending_until = NULL WHERE id = ?', user.id), editor.clear(user.id));
           if (user.is_admin) reply(adminText, adminKeyboard);
           else {
-            reply(welcome);
-            const date = localTime(s.now, s.env.TIMEZONE).date;
-            actions.push(...s.question(`u:${updateId}`, user.id, date, currentPeriod(s.now, s.env.TIMEZONE)));
+            const slots = await s.schedules(user.id);
+            reply(welcomeMessage(slots), scheduleKeyboard);
+            const local = localTime(s.now, s.env.TIMEZONE);
+            const active = slots.filter(slot => slot.enabled);
+            const slot = active.find(slot => slot.time_minutes >= local.hour * 60 + local.minute) ?? active.at(-1);
+            if (slot) actions.push(...s.question(`u:${updateId}`, user.id, local.date, slot));
           }
         } else if (command === '/stop') {
-          actions.push(s.sql('UPDATE users SET active = 0, pending_action = NULL, pending_until = NULL WHERE id = ?', user.id),
+          actions.push(s.sql('UPDATE users SET active = 0, pending_action = NULL, pending_until = NULL WHERE id = ?', user.id), editor.clear(user.id),
             s.sql('DELETE FROM reminders WHERE user_id = ?', user.id),
             s.sql("UPDATE outbox SET failed_at = ?, last_error = 'stopped' WHERE chat_id = ? AND sent_at IS NULL AND prompt_id IS NOT NULL", s.now, user.id));
           reply(stopped);
-        } else if (command === '/help') reply('شروع یادآوری‌ها: /start\nتوقف: /stop\nشناسهٔ شما: /id\n\nروزانه ساعت ۱۴ (یک قرص) و ۲۲ (دو قرص)، به وقت تهران.\nبا انتخاب «هنوز نه»، ۱۵ دقیقه بعد دوباره یادآوری می‌کنم.');
+        } else if (command === '/help') {
+          const slots = (await s.schedules(user.id)).filter(slot => slot.enabled);
+          reply('شروع یادآوری‌ها: /start\nتوقف: /stop\nشناسهٔ شما: /id\n\n' + scheduleGuide + '\n\n' +
+            (slots.map(slot => `${clockText(slot.time_minutes)} — ${shortPills(slot.pills)}`).join('\n') || 'فعلاً یادآوری فعالی نداری.') +
+            '\n\nبا انتخاب «هنوز نه»، ۱۵ دقیقه بعد دوباره یادآوری می‌کنم.', scheduleKeyboard);
+        }
         else if (command === '/cancel') {
-          actions.push(s.sql('UPDATE users SET pending_action = NULL, pending_until = NULL WHERE id = ?', user.id));
-          reply('Cancelled.');
+          actions.push(s.sql('UPDATE users SET pending_action = NULL, pending_until = NULL WHERE id = ?', user.id), editor.clear(user.id));
+          reply(user.is_admin ? 'Cancelled.' : 'ویرایش لغو شد.', user.is_admin ? undefined : scheduleKeyboard);
         } else if (['/admin', '/stats', '/logs', '/users', '/promote', '/demote', '/exit'].includes(command)) {
           if (!user.is_admin) reply('This command is not available.');
           else if (command === '/stats') reply(await this.stats(), back);
@@ -87,7 +103,9 @@ export class Bot {
           else reply(adminText, adminKeyboard);
         } else if (user.is_admin && user.pending_action && (user.pending_until ?? 0) > s.now) {
           await this.changeAdmin(text, user.pending_action === 'user_make_admin', user, actions, reply);
-        } else if (text) reply('برای شروع /start، برای توقف /stop و برای دیدن شناسه /id را بفرست.');
+        } else if (text && await editor.text(user, text, actions, reply)) {
+          // The persisted edit consumes this message until saved, canceled, or expired.
+        } else if (text) reply('برای شروع /start، برای توقف /stop و برای دیدن شناسه /id را بفرست.\n' + scheduleGuide, scheduleKeyboard);
       }
       await s.complete(updateId, actions);
     } catch (error) {
@@ -100,29 +118,33 @@ export class Bot {
     const s = this.store;
     const [, promptId, value] = update.callback_query!.data!.split('|');
     const prompt = promptId ? await s.prompt(promptId) : null;
+    const slot = prompt ? await s.schedule(user.id, prompt.schedule_key) : null;
     const today = localTime(s.now, s.env.TIMEZONE).date;
-    if (!prompt || !['yes', 'no'].includes(value ?? '') || prompt.user_id !== user.id || prompt.date !== today || !user.active || user.is_admin) {
+    if (!prompt || !['yes', 'no'].includes(value ?? '') || prompt.user_id !== user.id || prompt.date !== today || !user.active || user.is_admin ||
+        prompt.canceled_at || !slot?.enabled || slot.revision !== prompt.schedule_revision) {
       reply('این یادآوری فعال نیست. برای شروع دوباره /start را بفرست.'); return;
     }
     const completed = await s.sql("SELECT id FROM prompts WHERE series_id = ? AND answer = 'yes' LIMIT 1", prompt.series_id).first();
     if (prompt.answer || completed) { reply('پاسخت قبلاً ثبت شده است. 💚'); return; }
     // Conditional writes in one D1 transaction make concurrent/retried button taps harmless.
-    actions.push(s.sql(`UPDATE prompts SET answer = ?, answer_update_id = ?, answered_at = ? WHERE id = ? AND answer IS NULL
+    actions.push(s.sql(`UPDATE prompts SET answer = ?, answer_update_id = ?, answered_at = ? WHERE id = ? AND answer IS NULL AND canceled_at IS NULL
+      AND EXISTS (SELECT 1 FROM schedules WHERE user_id = prompts.user_id AND key = COALESCE(prompts.schedule_key, prompts.period)
+        AND revision = prompts.schedule_revision AND enabled = 1 AND deleted = 0)
       AND NOT EXISTS (SELECT 1 FROM prompts WHERE series_id = ? AND answer = 'yes')`,
     value!, update.update_id, s.now, prompt.id, prompt.series_id));
     if (value === 'no') {
       actions.push(s.sql(`INSERT INTO reminders(user_id, date, period, due_at, source_update_id)
-        SELECT user_id, date, period, ?, ? FROM prompts WHERE id = ? AND answer_update_id = ?
+        SELECT user_id, date, COALESCE(schedule_key, period), ?, ? FROM prompts WHERE id = ? AND answer_update_id = ?
         ON CONFLICT(user_id, date, period) DO UPDATE SET due_at = excluded.due_at, source_update_id = excluded.source_update_id`,
       s.now + 900_000, update.update_id, prompt.id, update.update_id));
     } else {
       actions.push(s.sql(`DELETE FROM reminders WHERE user_id = ? AND date = ? AND period = ?
-        AND source_update_id IN (SELECT answer_update_id FROM prompts WHERE series_id = ?)`, user.id, today, prompt.period, prompt.series_id),
+        AND source_update_id IN (SELECT answer_update_id FROM prompts WHERE series_id = ?)`, user.id, today, prompt.schedule_key, prompt.series_id),
         s.sql(`UPDATE outbox SET failed_at = ?, last_error = 'dose_confirmed' WHERE sent_at IS NULL AND prompt_id IN
           (SELECT id FROM prompts WHERE series_id = ?)`, s.now, prompt.series_id));
       const admins = await s.sql('SELECT id FROM users WHERE is_admin = 1 AND active = 1').all<{ id: number }>();
       const label = user.username ? `@${user.username}` : user.first_name || `User ${user.id}`;
-      const text = `${label} confirmed taking ${prompt.period === 'afternoon' ? '1 pill (2 p.m.)' : '2 pills (10 p.m.)'}.\nDate: ${today} (Tehran)\nUser ID: ${user.id}`;
+      const text = `${label} confirmed taking ${prompt.pills} (${clockText(prompt.time_minutes)}).\nDate: ${today} (Tehran)\nUser ID: ${user.id}`;
       for (const admin of admins.results) {
         actions.push(s.sql(`INSERT OR IGNORE INTO outbox(id, chat_id, method, payload, created_at, due_at)
           SELECT ?, ?, 'sendMessage', ?, ?, ? FROM prompts WHERE id = ? AND answer_update_id = ?`,
@@ -158,25 +180,32 @@ export class Bot {
   }
 
   async stats(date = localTime(this.store.now, this.store.env.TIMEZONE).date) {
-    const rows = await this.store.sql(`SELECT period, COUNT(*) AS total, SUM(answer = 'yes') AS yes, SUM(answer = 'no') AS no
-      FROM prompts WHERE date = ? AND answer IS NOT NULL GROUP BY period`, date).all<{ period: string; total: number; yes: number; no: number }>();
+    const rows = await this.store.sql(`SELECT COALESCE(time_minutes, CASE period WHEN 'afternoon' THEN 840 ELSE 1320 END) AS time_minutes,
+      COALESCE(pills, CASE period WHEN 'afternoon' THEN 'اسنترا' ELSE 'اون دوتا' END) AS pills,
+      COUNT(*) AS total, SUM(answer = 'yes') AS yes, SUM(answer = 'no') AS no
+      FROM prompts WHERE date = ? AND answer IS NOT NULL GROUP BY 1, 2 ORDER BY 1 LIMIT 20`, date)
+      .all<{ time_minutes: number; pills: string; total: number; yes: number; no: number }>();
     let text = `📊 Responses — ${date} (Tehran)\n`;
-    for (const slot of SCHEDULE) {
-      const row = rows.results.find(r => r.period === slot.period);
-      text += `\n${slot.label}\nYes: ${row?.yes ?? 0} | Not yet: ${row?.no ?? 0} | Total: ${row?.total ?? 0}\n`;
+    for (const row of rows.results) {
+      text += `\n${clockText(row.time_minutes)} · ${shortPills(row.pills, 42)}\nYes: ${row.yes} | Not yet: ${row.no} | Total: ${row.total}\n`;
     }
+    if (!rows.results.length) text += '\nNo responses logged yet.';
     const users = await this.store.sql(`SELECT u.id, u.username, u.first_name, SUM(p.answer = 'yes') AS yes, SUM(p.answer = 'no') AS no
       FROM prompts p JOIN users u ON u.id = p.user_id WHERE p.date = ? AND p.answer IS NOT NULL
       GROUP BY u.id ORDER BY u.id LIMIT 20`, date).all<User & { yes: number; no: number }>();
     if (users.results.length) text += '\nUsers (up to 20):\n' + users.results.map(u => `${u.username ? '@' + u.username : u.id}: ${u.yes} yes, ${u.no} not yet`).join('\n');
-    return text;
+    return text.slice(0, 3800);
   }
 
   async logs() {
-    const rows = await this.store.sql(`SELECT date, period, SUM(answer = 'yes') AS yes, SUM(answer = 'no') AS no
+    const rows = await this.store.sql(`SELECT date,
+      COALESCE(time_minutes, CASE period WHEN 'afternoon' THEN 840 ELSE 1320 END) AS time_minutes,
+      COALESCE(pills, CASE period WHEN 'afternoon' THEN 'اسنترا' ELSE 'اون دوتا' END) AS pills,
+      SUM(answer = 'yes') AS yes, SUM(answer = 'no') AS no
       FROM prompts WHERE answer IS NOT NULL AND date IN (SELECT DISTINCT date FROM prompts WHERE answer IS NOT NULL ORDER BY date DESC LIMIT 10)
-      GROUP BY date, period ORDER BY date DESC, period`).all<{ date: string; period: string; yes: number; no: number }>();
-    return rows.results.length ? '📝 Recent response logs (Tehran)\n\n' + rows.results.map(r => `${r.date} · ${r.period === 'afternoon' ? '2 p.m.' : '10 p.m.'}\nYes: ${r.yes} | Not yet: ${r.no}`).join('\n\n') : 'No responses logged yet.';
+      GROUP BY 1, 2, 3 ORDER BY date DESC, 2 LIMIT 30`).all<{ date: string; time_minutes: number; pills: string; yes: number; no: number }>();
+    return rows.results.length ? ('📝 Recent response logs (Tehran)\n\n' + rows.results.map(r =>
+      `${r.date} · ${clockText(r.time_minutes)} · ${shortPills(r.pills, 42)}\nYes: ${r.yes} | Not yet: ${r.no}`).join('\n\n')).slice(0, 3800) : 'No responses logged yet.';
   }
 
   async users(page = 0) {

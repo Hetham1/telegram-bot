@@ -12,9 +12,11 @@ export async function handleRequest(request: Request, env: Env, fetcher: Fetcher
   if ((path === '/' || path === '/health') && request.method === 'GET') {
     try {
       await env.DB.prepare('SELECT update_id FROM inbox LIMIT 1').all();
+      await env.DB.prepare('SELECT key, revision FROM schedules LIMIT 1').all();
       const configured = Boolean(env.BOT_TOKEN && env.WEBHOOK_SECRET);
       return Response.json({ service: 'saripill-telegram-bot', status: configured ? 'ok' : 'setup_required',
-        timezone: env.TIMEZONE ?? 'Asia/Tehran', reminders: [{ time: '14:00', pills: 1 }, { time: '22:00', pills: 2 }] },
+        timezone: env.TIMEZONE ?? 'Asia/Tehran', schedules: 'per_user',
+        default_reminders: [{ time: '14:00', pills: 1 }, { time: '22:00', pills: 2 }] },
       { status: configured ? 200 : 503, headers: { 'cache-control': 'no-store' } });
     } catch { return Response.json({ status: 'unavailable' }, { status: 503 }); }
   }

@@ -47,6 +47,7 @@ try {
       await telegram('setMyCommands', { commands: [
         { command: 'start', description: 'Start pill reminders' }, { command: 'stop', description: 'Pause reminders' },
         { command: 'id', description: 'Show your Telegram user ID' }, { command: 'help', description: 'Help and daily schedule' },
+        { command: 'schedule', description: 'قرص‌ها و ساعت‌ها 💊' },
       ] });
     }
     const info = await telegram('getWebhookInfo');
